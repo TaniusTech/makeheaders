@@ -1834,6 +1834,9 @@ static int ProcessProcedureDef(Token *pFirst, Token *pLast, int flags){
   if( strncmp(pName->zText, "TEST", pName->nText)==0 ){
 	return 0;
   }
+  if( strncmp(pName->zText, "TEST_F", pName->nText)==0 ){
+	return 0;
+  }
 
   /*
   ** At this point we've isolated a procedure declaration between pFirst
