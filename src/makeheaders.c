@@ -1517,6 +1517,8 @@ static int ProcessTypeDecl(Token *pList, int flags, int *pReset){
       case '[':
       case '=':
       case ';':
+      case ',':
+      case ')':
         return 0;
     }
   }
