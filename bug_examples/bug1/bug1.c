@@ -9,6 +9,6 @@ void func()
 #else
     while(true)
     {
-#if
+#endif
     }
 }
