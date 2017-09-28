@@ -2761,6 +2761,7 @@ static void DeclareObject(
 	  if( p->pPack!=0 ){
 		// XXX(sherry): lazy! need to traverse the stack if more than one.
         char buf[128];
+		memset(buf, 0, sizeof(buf));
 		sprintf(buf,"#pragma pack (%d)\n",p->pPack->alignment);
 		StringAppend(pState->pStr,buf,0);
       }
@@ -2786,10 +2787,20 @@ static void DeclareObject(
       DeclClearProperty(p,DP_Flag);
     }
   }
+  // sherry: need to look at typedefs of the same name but different ifdefs
   for(p=pDecl; p && !doneTypedef; p=p->pSameName){
-    if( DeclHasProperty(p,DP_Flag) ){
+    if( !DeclHasProperty(p,DP_Flag) )
+      continue;
+    bool ignore = false;
+	Decl *q = NULL;
+    // XXX(sherry): awful \Theta(n) search of duplicate ifdefs
+	for(q=pDecl; q && q!=p && !ignore; q=q->pSameName){
+      if( !strcmp(p->zIf,q->zIf) ){
+        ignore = true;
+      }
+    }
+    if( !ignore ){
       /* This has to be a typedef */
-      doneTypedef = 1;
       ChangeIfContext(p->zIf,pState);
       InsertExtraDecl(p);
       StringAppend(pState->pStr,p->zDecl,0);
