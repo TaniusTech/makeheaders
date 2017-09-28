@@ -2312,7 +2312,7 @@ static int ParsePreprocessor(Token *pToken, int flags, int *pPresetFlags){
 		const PragmaPack *next = packStack->pNext;
 		packStack->pNext = 0;
 		SafeFree(packStack);
-		packStack = next;
+		packStack = (PragmaPack *)next;
 	  }else if( alignment!=0 ){
 		PragmaPack *pPack = SafeMalloc( sizeof(PragmaPack) + nCmd + 1 );
 		memset(pPack,0,sizeof(PragmaPack));
