@@ -454,7 +454,7 @@ static void *SafeRealloc(void *pOld, int nByte){
 static char *StrDup(const char *zSrc, int nByte){
   char *zDest;
   if( nByte<=0 ){
-    nByte = strlen(zSrc);
+    nByte = (int)strlen(zSrc);
   }
   zDest = SafeMalloc( nByte + 1 );
   strncpy(zDest,zSrc,nByte);
@@ -481,7 +481,7 @@ static void StringReset(String *pStr){
 }
 static void StringAppend(String *pStr, const char *zText, int nByte){
   if( nByte<=0 ){
-    nByte = strlen(zText);
+    nByte = (int)strlen(zText);
   }
   if( pStr->nUsed + nByte >= pStr->nAlloc ){
     if( pStr->nAlloc==0 ){
@@ -505,7 +505,7 @@ static void StringAppend(String *pStr, const char *zText, int nByte){
 static int Hash(const char *z, int n){
   int h = 0;
   if( n<=0 ){
-    n = strlen(z);
+    n = (int)strlen(z);
   }
   while( n-- ){
     h = h ^ (h<<5) ^ *z++;
@@ -523,7 +523,7 @@ static Decl *FindDecl(const char *zName, int len){
   Decl *p;
 
   if( len<=0 ){
-    len = strlen(zName);
+    len = (int)strlen(zName);
   }
   h = Hash(zName,len) % DECL_HASH_SIZE;
   p = apTable[h];
@@ -660,7 +660,7 @@ static int IdentTableInsert(
   Ident *pId;
 
   if( nId<=0 ){
-    nId = strlen(zId);
+    nId = (int)strlen(zId);
   }
   h = Hash(zId,nId) % IDENT_HASH_SIZE;
   for(pId = pTable->apTable[h]; pId; pId=pId->pCollide){
@@ -693,7 +693,7 @@ static int IdentTableTest(
   Ident *pId;
 
   if( nId<=0 ){
-    nId = strlen(zId);
+    nId = (int)strlen(zId);
   }
   h = Hash(zId,nId) % IDENT_HASH_SIZE;
   for(pId = pTable->apTable[h]; pId; pId=pId->pCollide){
@@ -757,7 +757,7 @@ static char *ReadFile(const char *zFilename){
     return 0;
   }
   zBuf = SafeMalloc( sStat.st_size + 1 );
-  n = fread(zBuf,1,sStat.st_size,pIn);
+  n = (int)fread(zBuf,1,sStat.st_size,pIn);
   zBuf[n] = 0;
   fclose(pIn);
   return zBuf;
@@ -1471,7 +1471,7 @@ static char *TokensToString(
     pFirst = pFirst->pNext;
   }
   if( zTerm && *zTerm ){
-    StringAppend(&str,zTerm,strlen(zTerm));
+    StringAppend(&str,zTerm,(int)strlen(zTerm));
   }
   zReturn = StrDup(StringGet(&str),0);
   StringReset(&str);
@@ -2091,7 +2091,7 @@ static void PushIfMacro(
   nByte = sizeof(Ifmacro);
   if( zText ){
     if( zPrefix ){
-      nByte += strlen(zPrefix) + 2;
+      nByte += (int)strlen(zPrefix) + 2;
     }
     nByte += nText + 1;
   }
@@ -2136,7 +2136,7 @@ static int ParsePreprocessor(Token *pToken, int flags, int *pPresetFlags){
   int nArg;
   int nErr = 0;
   Ifmacro *pIf;
-  PragmaPack *pPack;
+//  PragmaPack *pPack;
 
   zCmd = &pToken->zText[1];
   while( isspace(*zCmd) && *zCmd!='\n' ){
@@ -2204,7 +2204,7 @@ static int ParsePreprocessor(Token *pToken, int flags, int *pPresetFlags){
     }
     zIf = GetIfString();
     if( zIf ){
-      pInclude = SafeMalloc( sizeof(Include) + nArg*2 + strlen(zIf) + 10 );
+      pInclude = SafeMalloc( (int)(sizeof(Include) + nArg*2 + strlen(zIf) + 10 ));
       pInclude->zFile = (char*)&pInclude[1];
       pInclude->zLabel = &pInclude->zFile[nArg+1];
       sprintf(pInclude->zFile,"%.*s",nArg,zArg);
@@ -2274,7 +2274,7 @@ static int ParsePreprocessor(Token *pToken, int flags, int *pPresetFlags){
     pIf = ifStack;
     if( pIf->zCondition ){
       ifStack = ifStack->pNext;
-      PushIfMacro("!",pIf->zCondition,strlen(pIf->zCondition),pIf->nLine,0);
+      PushIfMacro("!",pIf->zCondition,(int)strlen(pIf->zCondition),pIf->nLine,0);
       SafeFree(pIf);
     }else{
       pIf->flags = 0;
@@ -2555,7 +2555,7 @@ static void InsertExtraDecl(Decl *pDecl){
   String str;
 
   if( pDecl==0 || pDecl->zExtra==0 || pDecl->zDecl==0 ) return;
-  i = strlen(pDecl->zDecl) - 1;
+  i = (int)strlen(pDecl->zDecl) - 1;
   while( i>0 && pDecl->zDecl[i]!='}' ){ i--; }
   StringInit(&str);
   StringAppend(&str, pDecl->zDecl, i);
