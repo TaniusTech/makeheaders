@@ -2292,7 +2292,7 @@ static int ParsePreprocessor(Token *pToken, int flags, int *pPresetFlags){
 	  while( zArg[nCmd] && zArg[nCmd]!=')' ){
 		nCmd++;
 	  }
-	  char buf[nCmd + 1];
+	  char buf[128];
 	  strncpy(buf, argStart, nCmd);
 	  buf[nCmd] = 0;
 	  // XXX(sherry): hella sketchy
