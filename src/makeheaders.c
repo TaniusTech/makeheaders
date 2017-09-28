@@ -34,6 +34,7 @@ static const char ident[] = "@(#) $Header: /cvstrac/cvstrac/makeheaders.c,v 1.4 
 ** merchantability or fitness for a particular purpose.
 ** appropriate header files.
 */
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -1825,6 +1826,13 @@ static int ProcessProcedureDef(Token *pFirst, Token *pLast, int flags){
     fprintf(stderr,"%s:%d: Malformed function or procedure definition.\n",
       zFilename, pFirst->nLine);
     return 1;
+  }
+
+  /*
+  ** Ignore google test routines; they should not be predeclared in header.
+  */
+  if( strncmp(pName->zText, "TEST", pName->nText)==0 ){
+	return 0;
   }
 
   /*
