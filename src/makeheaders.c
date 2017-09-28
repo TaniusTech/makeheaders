@@ -103,6 +103,17 @@ struct InStream {
 };
 
 /*
+** Each nested #pragma pack () is stored in a stack of instances
+** of the following structure.
+*/
+typedef struct PragmaPack PragmaPack;
+struct PragmaPack {
+  int nLine;
+  int alignment;
+  PragmaPack *pNext;
+};
+
+/*
 ** Each declaration in the C or C++ source files is parsed out and stored as
 ** an instance of the following structure.
 **
@@ -136,6 +147,7 @@ struct Decl {
   Decl *pSameName;   /* Next declaration with the same "zName" */
   Decl *pSameHash;   /* Next declaration with same hash but different zName */
   Decl *pNext;       /* Next declaration with a different name */
+  PragmaPack *pPack; /* Packing pragmas */
 };
 
 /*
@@ -344,6 +356,12 @@ static char *zFilename;
 ** The stack of #if macros for the file currently being parsed.
 */
 static Ifmacro *ifStack = 0;
+
+/*
+** The stack of #pragma pack () macros for the struct currently being parsed.
+** Points to the top of the stack.
+*/
+static PragmaPack *packStack = 0;
 
 /*
 ** A list of all files that have been #included so far in a file being
@@ -599,6 +617,32 @@ static Decl *CreateDecl(
   pDecl->zIf = GetIfString();
   InstallDecl(pDecl);
   return pDecl;
+}
+
+/*
+** Copies the current pragma pack stack and returns a pointer to the copy.
+*/
+static PragmaPack *CopyPragmaPackStack(){
+  PragmaPack *pTop = 0;
+  PragmaPack *pNewCurrent = pTop;
+  PragmaPack *pNewPrev = 0;
+  PragmaPack *pCurrent = packStack;
+  while( pCurrent!=0 ){
+	pNewCurrent = SafeMalloc( sizeof(PragmaPack) );
+	memset(pNewCurrent,0,sizeof(PragmaPack));
+	pNewCurrent->alignment = pCurrent->alignment;
+	if( pNewPrev!=0 ){
+	  pNewPrev->pNext = pNewCurrent;
+	}
+
+	if( pTop==0 ){
+	  pTop = pNewCurrent;
+	}
+	pNewPrev = pNewCurrent;
+	pCurrent = pCurrent->pNext;
+	pNewCurrent = pNewCurrent->pNext;
+  }
+  return pTop;
 }
 
 /*
@@ -1532,6 +1576,7 @@ static int ProcessTypeDecl(Token *pList, int flags, int *pReset){
   }
   if( pDecl==0 ){
     pDecl = CreateDecl(pName->zText,pName->nText);
+	pDecl->pPack = CopyPragmaPackStack();
   }
   if( (flags & PS_Static) || !(flags & (PS_Interface|PS_Export)) ){
     DeclSetProperty(pDecl,DP_Local);
@@ -2078,6 +2123,7 @@ static int ParsePreprocessor(Token *pToken, int flags, int *pPresetFlags){
   int nArg;
   int nErr = 0;
   Ifmacro *pIf;
+  PragmaPack *pPack;
 
   zCmd = &pToken->zText[1];
   while( isspace(*zCmd) && *zCmd!='\n' ){
@@ -2220,6 +2266,50 @@ static int ParsePreprocessor(Token *pToken, int flags, int *pPresetFlags){
     }else{
       pIf->flags = 0;
     }
+  }else if( nCmd == 6 && strncmp(zCmd,"pragma",6)==0 ){
+    /*
+	** Pragma pack
+	*/
+	// look for 'pack'
+	zArg = &zCmd[6];
+	while( *zArg && isspace(*zArg) ){
+      zArg++;
+	}
+	const char *cmdStart = zArg;
+	nCmd = 0;
+	while( isalpha(zArg[nCmd]) ){
+	  nCmd++;
+	}
+
+	if( nCmd==4 && strncmp(zArg,"pack",4)==0 ){
+	  zArg += 4;
+	  while( *zArg && (isspace(*zArg) || *zArg=='(') ){
+	    zArg++;
+	  }
+	  // look at 'pack' arguments
+	  const char *argStart = zArg;
+	  nCmd = 0;
+	  while( zArg[nCmd] && zArg[nCmd]!=')' ){
+		nCmd++;
+	  }
+	  char buf[nCmd + 1];
+	  strncpy(buf, argStart, nCmd);
+	  buf[nCmd] = 0;
+	  // XXX(sherry): hella sketchy
+	  const int alignment = atoi(buf);
+	  if( nCmd==0 ){
+		const PragmaPack *next = packStack->pNext;
+		packStack->pNext = 0;
+		SafeFree(packStack);
+		packStack = next;
+	  }else if( alignment!=0 ){
+		PragmaPack *pPack = SafeMalloc( sizeof(PragmaPack) + nCmd + 1 );
+		memset(pPack,0,sizeof(PragmaPack));
+		pPack->alignment = alignment;
+		pPack->pNext = packStack;
+		packStack = pPack;
+	  }
+	}
   }else{
     /*
     ** This directive can be safely ignored 
@@ -2659,6 +2749,13 @@ static void DeclareObject(
         doneTypedef = 1;
       }
       ChangeIfContext(p->zIf,pState);
+	  // insert packing pragmas, if any
+	  if( p->pPack!=0 ){
+		// XXX(sherry): lazy! need to traverse the stack if more than one.
+        char buf[128];
+		sprintf(buf,"#pragma pack (%d)\n",p->pPack->alignment);
+		StringAppend(pState->pStr,buf,0);
+      }
       if( !isCpp && DeclHasAnyProperty(p,DP_ExternReqd) ){
         StringAppend(pState->pStr,"extern ",0);
       }else if( isCpp && DeclHasProperty(p,DP_Cplusplus|DP_ExternReqd) ){
@@ -2668,6 +2765,10 @@ static void DeclareObject(
       }
       InsertExtraDecl(p);
       StringAppend(pState->pStr,p->zDecl,0);
+	  if( p->pPack!=0 ){
+		// XXX(sherry): lazy! need to traverse the stack if more than one.
+		StringAppend(pState->pStr,"#pragma pack ()\n",0);
+      }
       if( !isCpp && DeclHasProperty(p,DP_Cplusplus) ){
         fprintf(stderr,
           "%s: C code ought not reference the C++ object \"%s\"\n",
@@ -3057,6 +3158,7 @@ static InFile *CreateInFile(char *zArg, int *pnErr){
   if( nSrc>2 && zSrc[nSrc-2]=='.' && (zSrc[nSrc-1]=='c' || zSrc[nSrc-1]=='h')){
     pFile->flags &= ~DP_Cplusplus;
   }else{
+	printf("looking at cpp code\n");
     pFile->flags |= DP_Cplusplus;
   }
 
